@@ -105,7 +105,7 @@ def train_and_eval_model(model, X_train, y_train, X_test, df_pred):
     """
     Train a model on training data, return a trained model and an evaluation df
     :param model:
-    :param X_train: training features dataframe
+    :param X_train: training features dataframe, the output from encode_data func or preproc_data func
     :param y_train: training label
     :param X_test: test features dataframe
     :param df_pred: the last output from function split_data, a df with columns 'ID', 'YEAR_MONTH', 'ACTUAL'
