@@ -55,7 +55,9 @@ RMSLE penalizes underestimates more than overestimates. Since the observed numbe
 nights booked is less than the actual, i.e., last minute bookings are not captured in the data,
 overestimates are more tolerated than underestimates.
 
-### 4.2. Model levels:
+### 4.2. Global Model
+
+Trained a xgbregressor model as a baseline for global models.
 
 
 
