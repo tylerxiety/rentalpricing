@@ -15,8 +15,8 @@ def evaluate(df_predictions):
     """
 
     # check data frame
-    cols = ['ID', 'MONTH', 'PRED', 'ACTUAL']
-    check_dataframe(df_predictions, cols):
+    cols = ['ID', 'YEAR_MONTH', 'ACTUAL','PRED']
+    check_dataframe(df_predictions, cols)
 
     # check if the input has NA, Null, Inf, None values
     df_inf = df_predictions.replace([np.inf, -np.inf], np.nan)
@@ -38,7 +38,7 @@ def evaluate(df_predictions):
 
 
 
-def insert_evaluation(engine, df, table):
+def insert_evaluation(engine, df, table_name):
     """
     Insert evaluation records to existed table
     :param engine: the connection engine from func connect_my_db
@@ -54,11 +54,11 @@ def insert_evaluation(engine, df, table):
                                                                      df.iloc[i]['METRIC'],
                                                                      df.iloc[i]['VALUE'])
 
-        insert_query = "INSERT INTO " + f'"{table}"' + values
+        insert_query = "INSERT INTO " + f'"{table_name}"' + values
         engine.execute(insert_query)
 
 
-def update_submission_id(engine, table, experiment_id, date_time):
+def update_submission_id(engine, table_name, experiment_id, date_time):
     """
     Update submission_id in evaluation table in postgres
     :param engine: the connection engine from func connect_my_db
@@ -70,7 +70,7 @@ def update_submission_id(engine, table, experiment_id, date_time):
     # extract max_submission_id
     where1 = f'WHERE "EXPERIMENT_ID" = {experiment_id} AND "DATETIME" != "{date_time}"'
     #'where "EXPERIMENT_ID" = {} and "DATETIME" != '.format(experiment_id) + "'{}'".format(date_time)
-    select_query = f'SELECT MAX("SUBMISSION_ID") AS max_submission_id FROM ' + f'"{table}" {where1}'
+    select_query = f'SELECT MAX("SUBMISSION_ID") AS max_submission_id FROM ' + f'"{table_name}" {where1}'
     #"select max(" + '"SUBMISSION_ID") as max_submission_id from' + f'"{table}" ' + where_pre
 
     df = pd.read_sql_query(select_query, con=engine)
@@ -82,7 +82,7 @@ def update_submission_id(engine, table, experiment_id, date_time):
         # update the new_submission_id
         where2 = f'WHERE "EXPERIMENT_ID"={experiment_id} AND "DATETIME"={date_time}'
         #'WHERE "EXPERIMENT_ID" = {} AND "DATETIME" = '.format(experiment_id) + "'{}'".format(date_time)
-        update_query = f'UPDATE "{table}" '+ f'SET "SUBMISSION_ID" = {new_submission_id} {where2}'
+        update_query = f'UPDATE "{table_name}" '+ f'SET "SUBMISSION_ID" = {new_submission_id} {where2}'
         #"UPDATE " + f'"{table}" '+"SET "+'"SUBMISSION_ID" = {} '.format(new_submission_id)+where2
         engine.execute(update_query)
 

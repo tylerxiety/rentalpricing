@@ -5,8 +5,8 @@ import yaml
 from sqlalchemy import create_engine
 import time
 import numpy as np
-
-
+import pandas as pd
+from dateutil import relativedelta
 
 
 def log_time(msg):
@@ -76,8 +76,26 @@ def fs_list(df):
     # create luxury_flag
     df_list['LUXURY_FLAG'] = np.where(df_list.CANCELLATION_POLICY.str.contains('luxury'), 1, 0)
 
+    # get year and month
+    df_list['YEAR'] = df_list.SCRAPED_DATE.str[:4].astype(int)
+    df_list['MONTH'] = df_list.SCRAPED_DATE.str[5:7].astype(int)
+
+
+
     return df_list
 
+
+def calculate_months(date1, date2):
+    """
+    calcualte months between two dates
+    :param date1:
+    :param date2:
+    :return:
+    """
+    r = relativedelta.relativedelta(date1, date2)
+    months = 12*abs(r.years)+abs(r.months)
+
+    return months
 
 def fs_host(df):
     """
@@ -93,6 +111,9 @@ def fs_host(df):
                        'HOST_PRIVATE_ROOMS',
                        'HOST_SHARED_ROOMS', 'HOST_VERIFICATIONS',
                        'HOST_HAS_PROFILE_PIC', 'HOST_IDENTITY_VERIFIED']]
+    # convert HOST_SINCE to the number of months hosted
+    df_host['HOST_MONTHS'] = df_host.apply(lambda row: calculate_months(
+        pd.to_datetime(row['SCRAPED_DATE']), pd.to_datetime(row['HOST_SINCE'])), axis=1)
 
     return df_host
 
@@ -111,6 +132,10 @@ def fs_review(df):
        'REVIEW_SCORES_COMMUNICATION', 'REVIEW_SCORES_LOCATION',
        'REVIEW_SCORES_VALUE','REVIEWS_PER_MONTH']]
 
+    #todo:
+    # Convert FIRST_REVIEW to how many months/days since first review
+    # Convert LAST_REVIEW to how many months/days since last review
+
     return df_review
 
 
@@ -126,3 +151,29 @@ def fs_location(df):
        'IS_LOCATION_EXACT']]
 
     return df_location
+
+def fs_price(df):
+    """
+    Take the input data and create features for the price dimensions
+    :param df: a cleansed listing data frame
+    :return: a data frame with ONLY the features for the price dimensions
+    """
+    #todo: price per guest, price
+    pass
+
+def read_table(engine, table_name, date_start = None, date_end = None):
+    """
+    Read the table from PostgreSQL
+    :param engine: the connection engine from sqlalchemy
+    :param table_name: name of the table
+    :param date_start: start date the data to retrieve
+    :param date_end: end date the data to retrieve
+    :return: the data frame read from the PostgreSQL
+    """
+    if None not in (date_start, date_end):
+        query = 'SELECT * FROM ' + f'"{table_name}" WHERE "DATE" between "{date_start}" and "{date_end}"'
+    else:
+        query = 'SELECT * FROM ' + f'"{table_name}"'
+
+    df = pd.read_sql(query, engine)
+    return df

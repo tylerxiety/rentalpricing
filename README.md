@@ -48,7 +48,16 @@ Findings:
 Features:
 
 ## 4. Modelling
-Models:
+
+### 4.1. Metrics
+For the regression problem, I choose RMSLE as the metric to train and evaluate models.
+RMSLE penalizes underestimates more than overestimates. Since the observed number of 
+nights booked is less than the actual, i.e., last minute bookings are not captured in the data,
+overestimates are more tolerated than underestimates.
+
+### 4.2. Model levels:
+
+
 
 ## 5. Optimization
 Optimization algorithms:
