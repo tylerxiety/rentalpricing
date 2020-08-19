@@ -4,10 +4,11 @@ import pandas as pd
 import sys
 import numpy as np
 
-def cleanse_data(df):
+def cleanse_data(df, list_data = True):
     """
     Take the input data and cleanse it by handling all the data issues
-    :param df: a dataframe of raw data
+    :param df: a dataframe of raw listing data
+    :param list_data: specify if the input data is listing data or calendar data
     :return: a cleansed dataframe
     """
     # make a copy
@@ -16,34 +17,46 @@ def cleanse_data(df):
     # col name uppercase
     df_cp.columns = df_cp.columns.str.upper()
 
-    # tide col names
-    colname_map = {'CALCULATED_HOST_LISTINGS_COUNT': 'HOST_LISTINGS_COUNT',
-                   'CALCULATED_HOST_LISTINGS_COUNT_ENTIRE_HOMES': 'HOST_ENTIRE_HOMES',
-                   'CALCULATED_HOST_LISTINGS_COUNT_PRIVATE_ROOMS': 'HOST_PRIVATE_ROOMS',
-                   'CALCULATED_HOST_LISTINGS_COUNT_SHARED_ROOMS': 'HOST_SHARED_ROOMS',
-                   'LAST_SCRAPED': 'SCRAPED_DATE'}
-    df_cp = df_cp.rename(columns=colname_map)
+    if list_data:
+        # tide col names
+        colname_map = {'CALCULATED_HOST_LISTINGS_COUNT': 'HOST_LISTINGS_COUNT',
+                       'CALCULATED_HOST_LISTINGS_COUNT_ENTIRE_HOMES': 'HOST_ENTIRE_HOMES',
+                       'CALCULATED_HOST_LISTINGS_COUNT_PRIVATE_ROOMS': 'HOST_PRIVATE_ROOMS',
+                       'CALCULATED_HOST_LISTINGS_COUNT_SHARED_ROOMS': 'HOST_SHARED_ROOMS',
+                       'LAST_SCRAPED': 'SCRAPED_DATE'}
+        df_cp = df_cp.rename(columns=colname_map)
 
-    # str columns lowercase
-    df_cp.PROPERTY_TYPE = df_cp.PROPERTY_TYPE.str.lower()
-    df_cp.ROOM_TYPE = df_cp.ROOM_TYPE.str.lower()
-    df_cp.BED_TYPE = df_cp.BED_TYPE.str.lower()
-    df_cp.CANCELLATION_POLICY = df_cp.CANCELLATION_POLICY.str.lower()
+        # str columns lowercase
+        for col in ['PROPERTY_TYPE','ROOM_TYPE','BED_TYPE','CANCELLATION_POLICY']:
+            df_cp[col] = df_cp[col].str.lower()
 
-    # convert 't'and 'f' to 1 and 0
-    df_cp.INSTANT_BOOKABLE = df_cp.INSTANT_BOOKABLE.replace({'t': 1, 'f': 0})
-    df_cp.REQUIRE_GUEST_PROFILE_PICTURE = df_cp.REQUIRE_GUEST_PROFILE_PICTURE.replace({'t': 1, 'f': 0})
-    df_cp.REQUIRE_GUEST_PHONE_VERIFICATION = df_cp.REQUIRE_GUEST_PHONE_VERIFICATION.replace({'t': 1, 'f': 0})
-    df_cp.HOST_IS_SUPERHOST = df_cp.HOST_IS_SUPERHOST.replace({'t': 1, 'f': 0})
-    df_cp.HOST_HAS_PROFILE_PIC = df_cp.HOST_HAS_PROFILE_PIC.replace({'t': 1, 'f': 0})
-    df_cp.HOST_IDENTITY_VERIFIED = df_cp.HOST_IDENTITY_VERIFIED.replace({'t': 1, 'f': 0})
-    df_cp.IS_LOCATION_EXACT = df_cp.IS_LOCATION_EXACT.replace({'t': 1, 'f': 0})
+        # convert 't'and 'f' to 1 and 0
+        for col in ['INSTANT_BOOKABLE', 'REQUIRE_GUEST_PROFILE_PICTURE', 'REQUIRE_GUEST_PHONE_VERIFICATION'
+                    , 'HOST_IS_SUPERHOST', 'HOST_HAS_PROFILE_PIC', 'HOST_IDENTITY_VERIFIED'
+                    , 'IS_LOCATION_EXACT', 'IS_BUSINESS_TRAVEL_READY']:
+            df_cp[col].replace({'t': 1, 'f': 0}, inplace = True)
 
-    # convert str to num
-    df_cp.HOST_RESPONSE_RATE = df_cp.HOST_RESPONSE_RATE.str.replace('%', '').astype(float)
-    df_cp.HOST_ACCEPTANCE_RATE = df_cp.HOST_ACCEPTANCE_RATE.str.replace('%', '').astype(float)
+        # convert str to num
+        for col in ['HOST_RESPONSE_RATE', 'HOST_ACCEPTANCE_RATE']:
+            df_cp[col] = df_cp[col].str.replace('%', '').astype(float)
+
+    else: # calendar data
+        # tide col names
+        colname_map = {'ADJUSTED_PRICE': 'TXN_PRICE',
+                       'PRICE':'BASE_PRICE'}
+        df_cp = df_cp.rename(columns=colname_map)
+
+        # convert prices to float
+        # convert to float to keep nan values
+
+        for col in ['TXN_PRICE','BASE_PRICE']:
+            df_cp[col] = df_cp[col].str.replace('$', '')
+            df_cp[col] = df_cp[col].str.replace(',', '')
+            df_cp[col] = df_cp[col].astype(float)
 
     return df_cp
+
+
 
 
 def check_dataframe(df, cols):
