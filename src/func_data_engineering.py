@@ -7,6 +7,8 @@ import time
 import numpy as np
 import pandas as pd
 from dateutil import relativedelta
+import glob
+import os
 
 
 def log_time(msg):
@@ -44,45 +46,115 @@ def upload_df(engine, df, table_name):
 
 
 
-def fs_list(df):
+def fs_listing(df, output_all = False):
     """
     Take the input data and create features for the listing dimensions
     :param df: a cleansed listing data frame
     :return: a data frame with ONLY the features for the listing dimensions
     """
-    # select listing features
-    df_list = df[['ID', 'HOST_ID', 'SCRAPED_DATE',
-                     'PROPERTY_TYPE', 'ROOM_TYPE', 'ACCOMMODATES',
-                     'BATHROOMS', 'BEDROOMS', 'BEDS', 'BED_TYPE', 'AMENITIES', 'SQUARE_FEET',
-                     'INSTANT_BOOKABLE', 'IS_BUSINESS_TRAVEL_READY', 'GUESTS_INCLUDED',
-                     'CANCELLATION_POLICY', 'REQUIRE_GUEST_PROFILE_PICTURE',
-                     'REQUIRE_GUEST_PHONE_VERIFICATION',
-                     'LUXURY_FLAG', 'NEIGHBOURHOOD_CLEANSED', 'LATITUDE', 'LONGITUDE',
-                     'IS_LOCATION_EXACT', ]]
+
+    # make a copy
+    df_cp = df.copy()
 
     # 'aggregate' some features
     # todo: experiment on keep more values
-    df_list.PROPERTY_TYPE = df_list.PROPERTY_TYPE.replace(['loft', 'guest suite', 'condominium'], 'apartment')
-    df_list.PROPERTY_TYPE = df_list.PROPERTY_TYPE.replace(
+    df_cp.PROPERTY_TYPE = df_cp.PROPERTY_TYPE.replace(['loft', 'guest suite', 'condominium'], 'apartment')
+    df_cp.PROPERTY_TYPE = df_cp.PROPERTY_TYPE.replace(
         ['townhouse', 'guesthouse', 'cottage', 'bungalow', 'cabin', 'tiny house', 'nature lodge', 'villa',
          'earth house', 'castle',
          'treehouse', 'chalet', 'lighthouse'], 'house')
-    df_list.PROPERTY_TYPE = df_list.PROPERTY_TYPE.replace(
+    df_cp.PROPERTY_TYPE = df_cp.PROPERTY_TYPE.replace(
         ['farm stay', 'bed and breakfast', 'barn', 'train', 'boat', 'camper/rv', 'tent', 'hut', 'kezhan (china)',
          'casa particular (cuba)', 'campsite', 'dome house', 'tipi'], 'other')
-    df_list.PROPERTY_TYPE = df_list.PROPERTY_TYPE.replace(
+    df_cp.PROPERTY_TYPE = df_cp.PROPERTY_TYPE.replace(
         ['boutique hotel', 'serviced apartment', 'hotel', 'hostel', 'aparthotel'], 'serviced')
 
     # create luxury_flag
-    df_list['LUXURY_FLAG'] = np.where(df_list.CANCELLATION_POLICY.str.contains('luxury'), 1, 0)
+    df_cp['LUXURY_FLAG'] = np.where(df_cp.CANCELLATION_POLICY.str.contains('luxury'), 1, 0)
+
+    if output_all:
+
+        cols = ['ID', 'YEAR_MONTH', 'PROPERTY_TYPE', 'ROOM_TYPE', 'ACCOMMODATES'
+            , 'BATHROOMS', 'BEDROOMS', 'BEDS', 'BED_TYPE', 'AMENITIES', 'SQUARE_FEET'
+            , 'INSTANT_BOOKABLE', 'IS_BUSINESS_TRAVEL_READY', 'GUESTS_INCLUDED'
+            , 'CANCELLATION_POLICY', 'REQUIRE_GUEST_PROFILE_PICTURE'
+            , 'REQUIRE_GUEST_PHONE_VERIFICATION', 'LUXURY_FLAG']
+        df_listing = df_cp[cols]
+        return df_listing
+
+    else:
+        return df_cp
+
+def fs_time(df, output_all = False):
+    """
+    Take the input data and create features for the time dimension
+    :param df: a cleansed listing data frame
+    :return: a data frame with ONLY the features for the time dimension
+    """
+    # make a copy
+    df_cp = df.copy()
 
     # get year and month
-    df_list['YEAR'] = df_list.SCRAPED_DATE.str[:4].astype(int)
-    df_list['MONTH'] = df_list.SCRAPED_DATE.str[5:7].astype(int)
+    df_cp['YEAR'] = df_cp.YEAR_MONTH.str[:4].astype(int)
+    df_cp['MONTH'] = df_cp.YEAR_MONTH.str[5:7].astype(int)
+
+    # quarter
+    df_cp["SCRAPED_DATE"] = pd.to_datetime(df_cp.SCRAPED_DATE)
+    df_cp["QUARTER"] = df_cp["SCRAPED_DATE"].dt.quarter
+    df_cp["YEAR_START"] = df_cp["SCRAPED_DATE"].dt.is_year_start
+    df_cp["YEAR_END"] = df_cp["SCRAPED_DATE"].dt.is_year_end
 
 
+    # todo: add number of holidays each month
 
-    return df_list
+    if output_all:
+        cols = ['ID', 'YEAR_MONTH', 'MONTH','QUARTER','YEAR','YEAR_START','YEAR_END']
+        df_time = df_cp[cols]
+        return df_time
+    else:
+        return df_cp
+
+
+def fs_price(df, monthly = False):
+    """
+    Take the input data and create features for the price dimension
+    :param df: a cleansed listing data frame
+    :return: a data frame with ONLY the features for the price dimension
+    """
+    # make a copy
+    df_cp = df.copy()
+    df_cp['PRICE_PER_GUEST'] = df_cp.TXN_PRICE/df_cp.GUESTS_INCLUDED
+    #lag
+    df_cp["PRICE_LAG_1"] = df_cp.sort_values(by='YEAR_MONTH').groupby(["ID"])["TXN_PRICE"].shift(1)
+    df_cp["PRICE_LAG_2"] = df_cp.sort_values(by='YEAR_MONTH').groupby(["ID"])["TXN_PRICE"].shift(2)
+    df_cp["PRICE_LAG_3"] = df_cp.sort_values(by='YEAR_MONTH').groupby(["ID"])["TXN_PRICE"].shift(3)
+    # minus lag
+    df_cp["PRICE_MINUS_LAG_1"] = df_cp.TXN_PRICE - df_cp.PRICE_LAG_1
+    df_cp["PRICE_MINUS_LAG_2"] = df_cp.TXN_PRICE - df_cp.PRICE_LAG_2
+    df_cp["PRICE_MINUS_LAG_3"] = df_cp.TXN_PRICE - df_cp.PRICE_LAG_3
+    # moving average/median
+    pma3 = df_cp.sort_values(by='YEAR_MONTH').groupby(["ID"])["TXN_PRICE"].rolling(window=3).median()
+    df_cp['PRICE_MA_3'] = pma3.reset_index(level=0, drop=True).reset_index(level=0, drop=True)
+
+    # minus moving average
+    df_cp["PRICE_MINUS_MA_3"] = df_cp.TXN_PRICE - df_cp.PRICE_MA_3
+
+
+    if monthly:
+        cols = ['ID', 'YEAR_MONTH','TXN_PRICE', 'PRICE_PER_GUEST'
+            , 'SECURITY_DEPOSIT','CLEANING_FEE','EXTRA_PEOPLE'
+            , 'PRICE_LAG_1', 'PRICE_LAG_2', 'PRICE_LAG_3'
+            , 'PRICE_MINUS_LAG_1','PRICE_MINUS_LAG_2','PRICE_MINUS_LAG_3'
+            , 'PRICE_MA_3','PRICE_MINUS_MA_3']
+
+    else:
+        cols = ['ID', 'DATE','BASE_PRICE', 'TXN_PRICE', 'PRICE_PER_GUEST'
+            ,'MONTHLY_PRICE', 'WEEKLY_PRICE'
+            ,'SECURITY_DEPOSIT','CLEANING_FEE','EXTRA_PEOPLE',]
+
+    df_price = df_cp[cols]
+    return df_price
+
 
 
 def calculate_months(date1, date2):
@@ -96,6 +168,71 @@ def calculate_months(date1, date2):
     months = 12*abs(r.years)+abs(r.months)
 
     return months
+
+# def fs_(df, output_all = False):
+#     """
+#     Take the input data and create features for the time dimension
+#     :param df: a cleansed listing data frame
+#     :return: a data frame with ONLY the features for the time dimension
+#     """
+#     # make a copy
+#     df_cp = df.copy()
+#
+#
+#
+#     if output_all:
+#         cols = ['ID', 'YEAR_MONTH']
+#         df_time = df_cp[cols]
+#         return df_time
+#     else:
+#         return df_cp
+
+def fs_calendar(df, output_all = False):
+    """
+    Take the input data and create features for the calendar dimension
+    :param df: a cleansed listing data frame
+    :return: a data frame with ONLY the features for the calendar dimension
+    """
+    # make a copy
+    df_cp = df.copy()
+
+
+    if output_all:
+        cols = ['ID', 'YEAR_MONTH', 'MAX_MINIMUM_NIGHTS', 'MIN_MINIMUM_NIGHTS'
+                ,'MIN_MAXIMUM_NIGHTS','MAX_MAXIMUM_NIGHTS','AVG_MINIMUM_NIGHTS'
+                ,'AVG_MAXIMUM_NIGHTS', 'CALENDAR_UPDATED','AVAILABILITY_60'
+                ,'AVAILABILITY_90','AVAILABILITY_365']
+        df_cal = df_cp[cols]
+        return df_cal
+    else:
+        return df_cp
+
+def fs_booked(df, output_all = False):
+    """
+    Take the input data and create features for the booked dimension
+    :param df: a cleansed listing data frame
+    :return: a data frame with ONLY the features for the booked dimension
+    """
+    # make a copy
+    df_cp = df.copy()
+    df_cp["BOOKED_LAG_1"] = df_cp.sort_values(by='YEAR_MONTH').groupby(["ID"])["BOOKED"].shift(1)
+    df_cp["BOOKED_LAG_3"] = df_cp.sort_values(by='YEAR_MONTH').groupby(["ID"])["BOOKED"].shift(3)
+    df_cp["BOOKED_LAG1_MINUS_LAG3"] = df_cp.BOOKED_LAG_1 - df_cp.BOOKED_LAG_3
+
+    # lag1 moving average/median
+    ma3 = df_cp.sort_values(by='YEAR_MONTH').groupby(["ID"])["BOOKED_LAG_1"].rolling(window=3).median()
+    df_cp['BOOKED_LAG1_MA3'] = ma3.reset_index(level=0, drop=True).reset_index(level=0, drop=True)
+
+    # minus moving average
+    df_cp["BOOKED_LAG1_MINUS_LAG1MA3"] = df_cp.BOOKED_LAG_1 - df_cp.BOOKED_LAG1_MA3
+
+    if output_all:
+        cols = ['ID', 'YEAR_MONTH','BOOKED','BOOKED_LAG_1','BOOKED_LAG_3','BOOKED_LAG1_MINUS_LAG3'
+                ,'BOOKED_LAG1_MA3','BOOKED_LAG1_MINUS_LAG1MA3']
+        df_booked = df_cp[cols]
+        return df_booked
+    else:
+        return df_cp
 
 def fs_host(df):
     """
@@ -116,6 +253,7 @@ def fs_host(df):
         pd.to_datetime(row['SCRAPED_DATE']), pd.to_datetime(row['HOST_SINCE'])), axis=1)
 
     return df_host
+
 
 
 def fs_review(df):
@@ -152,14 +290,7 @@ def fs_location(df):
 
     return df_location
 
-def fs_price(df):
-    """
-    Take the input data and create features for the price dimensions
-    :param df: a cleansed listing data frame
-    :return: a data frame with ONLY the features for the price dimensions
-    """
-    #todo: price per guest, price
-    pass
+
 
 def read_table(engine, table_name, date_start = None, date_end = None):
     """
@@ -177,3 +308,42 @@ def read_table(engine, table_name, date_start = None, date_end = None):
 
     df = pd.read_sql(query, engine)
     return df
+
+def read_data(path, file_names, col_scrape_date, col_names=None):
+    """
+    Read multiple csv files and output a list of  dataframe
+    :param path: file path
+    :param file_names: file names in regex
+    :param col_names: columns to output
+    :param col_scrape_date: the column to be used to create scrape_date
+    :return: a list of df
+    """
+    file_paths = glob.glob(os.path.join(path, file_names))
+    list_df = []
+
+    for file in file_paths:
+        df = pd.read_csv(file, header=0, low_memory=False)
+        if col_names:
+            df = df[col_names]
+        df['SCRAPED_DATE'] = df[col_scrape_date].min()
+        list_df.append(df)
+
+    return list_df
+
+def agg_to_monthly(df):
+    """
+    Aggregate calednar data to monthly
+    :param df: calender daily data
+    :return: a df of monthly calendar data
+    """
+    # make a copy
+    df_cp = df.copy()
+
+    df_cp['YEAR_MONTH'] = df_cp.DATE.str[:7]
+
+    df_cp = df_cp.groupby(['ID', 'YEAR_MONTH']).agg({
+        'BASE_PRICE': 'median'
+        , 'TXN_PRICE': 'median'
+        , 'BOOKED': 'sum'}).reset_index()
+
+    return df_cp

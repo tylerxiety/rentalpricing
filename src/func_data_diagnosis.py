@@ -19,11 +19,17 @@ def cleanse_data(df, list_data = True):
 
     if list_data:
         # tide col names
-        colname_map = {'CALCULATED_HOST_LISTINGS_COUNT': 'HOST_LISTINGS_COUNT',
-                       'CALCULATED_HOST_LISTINGS_COUNT_ENTIRE_HOMES': 'HOST_ENTIRE_HOMES',
-                       'CALCULATED_HOST_LISTINGS_COUNT_PRIVATE_ROOMS': 'HOST_PRIVATE_ROOMS',
-                       'CALCULATED_HOST_LISTINGS_COUNT_SHARED_ROOMS': 'HOST_SHARED_ROOMS',
-                       'LAST_SCRAPED': 'SCRAPED_DATE'}
+        colname_map = {'CALCULATED_HOST_LISTINGS_COUNT': 'HOST_LISTINGS_COUNT'
+            , 'CALCULATED_HOST_LISTINGS_COUNT_ENTIRE_HOMES': 'HOST_ENTIRE_HOMES'
+            , 'CALCULATED_HOST_LISTINGS_COUNT_PRIVATE_ROOMS': 'HOST_PRIVATE_ROOMS'
+            , 'CALCULATED_HOST_LISTINGS_COUNT_SHARED_ROOMS': 'HOST_SHARED_ROOMS'
+            , 'MINIMUM_MINIMUM_NIGHTS': 'MIN_MINIMUM_NIGHTS'
+            , 'MAXIMUM_MINIMUM_NIGHTS': 'MAX_MINIMUM_NIGHTS'
+            , 'MINIMUM_MAXIMUM_NIGHTS': 'MIN_MAXIMUM_NIGHTS'
+            , 'MAXIMUM_MAXIMUM_NIGHTS': 'MAX_MAXIMUM_NIGHTS'
+            , 'MINIMUM_NIGHTS_AVG_NTM': 'AVG_MINIMUM_NIGHTS'
+            , 'MAXIMUM_NIGHTS_AVG_NTM': 'AVG_MAXIMUM_NIGHTS'
+            }
         df_cp = df_cp.rename(columns=colname_map)
 
         # str columns lowercase
@@ -42,8 +48,9 @@ def cleanse_data(df, list_data = True):
 
     else: # calendar data
         # tide col names
-        colname_map = {'ADJUSTED_PRICE': 'TXN_PRICE',
-                       'PRICE':'BASE_PRICE'}
+        colname_map = {'LISTING_ID': 'ID'
+            , 'ADJUSTED_PRICE': 'TXN_PRICE'
+            , 'PRICE': 'BASE_PRICE'}
         df_cp = df_cp.rename(columns=colname_map)
 
         # convert prices to float
@@ -53,6 +60,9 @@ def cleanse_data(df, list_data = True):
             df_cp[col] = df_cp[col].str.replace('$', '')
             df_cp[col] = df_cp[col].str.replace(',', '')
             df_cp[col] = df_cp[col].astype(float)
+
+        # convert availability to booked
+        df_cp['BOOKED'] = df_cp.AVAILABLE.replace({'t': 0, 'f': 1})
 
     return df_cp
 
