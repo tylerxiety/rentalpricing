@@ -44,6 +44,95 @@ def upload_df(engine, df, table_name):
 
     return tok - tik
 
+def read_table(engine, table_name, date_start = None, date_end = None):
+    """
+    Read the table from PostgreSQL
+    :param engine: the connection engine from sqlalchemy
+    :param table_name: name of the table
+    :param date_start: start date the data to retrieve
+    :param date_end: end date the data to retrieve
+    :return: the data frame read from the PostgreSQL
+    """
+    if None not in (date_start, date_end):
+        query = 'SELECT * FROM ' + f'"{table_name}" WHERE "DATE" between "{date_start}" and "{date_end}"'
+    else:
+        query = 'SELECT * FROM ' + f'"{table_name}"'
+
+    df = pd.read_sql(query, engine)
+    return df
+
+def read_data(path, file_names, col_scrape_date, listing_data = False):
+    """
+    Read multiple csv files and output a list of  dataframe
+    :param path: file path
+    :param file_names: file names in regex
+    :param col_names: columns to output
+    :param col_scrape_date: the column to be used to create scrape_date
+    :return: a list of df
+    """
+    file_paths = glob.glob(os.path.join(path, file_names))
+    list_df = []
+
+    for file in file_paths:
+
+        df = pd.read_csv(file, header=0, low_memory=False)
+        if listing_data:
+            cols = [
+                # listing
+                'id', 'last_scraped', 'property_type', 'room_type', 'accommodates'
+                , 'bathrooms', 'bedrooms', 'beds', 'bed_type', 'amenities', 'square_feet'
+                , 'instant_bookable', 'is_business_travel_ready', 'cancellation_policy'
+                , 'require_guest_profile_picture', 'require_guest_phone_verification'
+                , 'guests_included'
+                # calendar
+                , 'minimum_nights', 'maximum_nights', 'minimum_minimum_nights', 'maximum_minimum_nights'
+                , 'minimum_maximum_nights', 'maximum_maximum_nights', 'minimum_nights_avg_ntm'
+                , 'maximum_nights_avg_ntm', 'calendar_updated', 'has_availability', 'availability_30'
+                , 'availability_60', 'availability_90', 'availability_365', 'calendar_last_scraped'
+                # reviews
+                , 'number_of_reviews', 'number_of_reviews_ltm', 'first_review', 'last_review'
+                , 'review_scores_rating', 'review_scores_accuracy', 'review_scores_cleanliness'
+                , 'review_scores_checkin', 'review_scores_communication', 'review_scores_location'
+                , 'review_scores_value', 'reviews_per_month'
+                # prices
+                , 'price', 'weekly_price', 'monthly_price', 'security_deposit', 'cleaning_fee'
+                , 'extra_people'
+                # location
+                , 'street', 'neighbourhood_cleansed', 'city', 'state'
+                , 'zipcode', 'market', 'smart_location', 'country', 'latitude', 'longitude'
+                , 'is_location_exact'
+                # host
+                , 'host_id', 'host_since', 'host_neighbourhood', 'host_response_time'
+                , 'host_response_rate', 'host_acceptance_rate', 'host_is_superhost'
+                , 'calculated_host_listings_count', 'calculated_host_listings_count_entire_homes'
+                , 'calculated_host_listings_count_private_rooms'
+                , 'calculated_host_listings_count_shared_rooms'
+                , 'host_verifications', 'host_has_profile_pic', 'host_identity_verified'
+            ]
+
+            df = df[cols]
+        df['SCRAPED_DATE'] = df[col_scrape_date].min()
+        list_df.append(df)
+
+    return list_df
+
+def agg_to_monthly(df):
+    """
+    Aggregate calednar data to monthly
+    :param df: calender daily data
+    :return: a df of monthly calendar data
+    """
+    # make a copy
+    df_cp = df.copy()
+
+    df_cp['YEAR_MONTH'] = df_cp.DATE.str[:7]
+
+    df_cp = df_cp.groupby(['ID', 'YEAR_MONTH']).agg({
+        'BASE_PRICE': 'median'
+        , 'TXN_PRICE': 'median'
+        , 'BOOKED': 'sum'}).reset_index()
+
+    return df_cp
 
 
 def fs_listing(df, output_all = False):
@@ -160,32 +249,22 @@ def fs_price(df, monthly = False):
 def calculate_months(date1, date2):
     """
     calcualte months between two dates
-    :param date1:
-    :param date2:
-    :return:
+    :param date1: date str
+    :param date2: date str
+    :return: months difference b/w the dates
     """
-    r = relativedelta.relativedelta(date1, date2)
-    months = 12*abs(r.years)+abs(r.months)
+    if isinstance(date2, str) & isinstance(date1, str):
+        date1 = pd.to_datetime(date1)
+        date2 = pd.to_datetime(date2)
 
-    return months
+        r = relativedelta.relativedelta(date1, date2)
+        months = 12*abs(r.years)+abs(r.months)
 
-# def fs_(df, output_all = False):
-#     """
-#     Take the input data and create features for the time dimension
-#     :param df: a cleansed listing data frame
-#     :return: a data frame with ONLY the features for the time dimension
-#     """
-#     # make a copy
-#     df_cp = df.copy()
-#
-#
-#
-#     if output_all:
-#         cols = ['ID', 'YEAR_MONTH']
-#         df_time = df_cp[cols]
-#         return df_time
-#     else:
-#         return df_cp
+        return months
+    else:
+        pass
+
+
 
 def fs_calendar(df, output_all = False):
     """
@@ -234,6 +313,52 @@ def fs_booked(df, output_all = False):
     else:
         return df_cp
 
+
+def fs_review(df, output_all = False):
+    """
+    Take the input data and create features for the review dimension
+    :param df: a cleansed listing data frame
+    :return: a data frame with ONLY the features for the review dimension
+    """
+    # make a copy
+    df_cp = df.copy()
+
+    for col in ['FIRST_REVIEW', 'LAST_REVIEW']:
+        df_cp[f'MONTH_SINCE_{col}'] = df_cp.apply(lambda row: calculate_months(
+            row['SCRAPED_DATE'], row[col]), axis=1)
+
+    if output_all:
+        cols = ['ID', 'YEAR_MONTH', 'NUMBER_OF_REVIEWS', 'MONTH_SINCE_FIRST_REVIEW'
+            , 'MONTH_SINCE_LAST_REVIEW', 'REVIEW_SCORES_RATING', 'REVIEW_SCORES_ACCURACY'
+            , 'REVIEW_SCORES_CLEANLINESS', 'REVIEW_SCORES_CHECKIN', 'REVIEW_SCORES_COMMUNICATION'
+            , 'REVIEW_SCORES_LOCATION', 'REVIEW_SCORES_VALUE', 'REVIEWS_PER_MONTH']
+        df_review = df_cp[cols]
+        return df_review
+    else:
+        return df_cp
+
+
+
+def fs_location(df, output_all = False):
+    """
+    Take the input data and create features for the location dimension
+    :param df: a cleansed listing data frame
+    :return: a data frame with ONLY the features for the location dimension
+    """
+    # make a copy
+    df_cp = df.copy()
+
+    df_cp = df_cp.rename(columns={'NEIGHBOURHOOD_CLEANSED':'NEIGHBOURHOOD'})
+
+    if output_all:
+        cols = ['ID', 'YEAR_MONTH', 'STREET', 'NEIGHBOURHOOD'
+            , 'CITY', 'STATE', 'ZIPCODE', 'SMART_LOCATION'
+            , 'COUNTRY', 'LATITUDE', 'LONGITUDE', 'IS_LOCATION_EXACT']
+        df_location = df_cp[cols]
+        return df_location
+    else:
+        return df_cp
+
 def fs_host(df):
     """
     Take the input data and create features for the host dimensions
@@ -254,96 +379,43 @@ def fs_host(df):
 
     return df_host
 
-
-
-def fs_review(df):
+def fs_host(df, output_all = False):
     """
-    Take the input data and create features for the review dimensions
+    Take the input data and create features for the host dimension
     :param df: a cleansed listing data frame
-    :return: a data frame with ONLY the features for the review dimensions
-    """
-    # make a copy
-    df_review = df[['ID', 'SCRAPED_DATE','NUMBER_OF_REVIEWS',
-                     'FIRST_REVIEW',
-       'LAST_REVIEW', 'REVIEW_SCORES_RATING', 'REVIEW_SCORES_ACCURACY',
-       'REVIEW_SCORES_CLEANLINESS', 'REVIEW_SCORES_CHECKIN',
-       'REVIEW_SCORES_COMMUNICATION', 'REVIEW_SCORES_LOCATION',
-       'REVIEW_SCORES_VALUE','REVIEWS_PER_MONTH']]
-
-    #todo:
-    # Convert FIRST_REVIEW to how many months/days since first review
-    # Convert LAST_REVIEW to how many months/days since last review
-
-    return df_review
-
-
-def fs_location(df):
-    """
-    Take the input data and create features for the location dimensions
-    :param df: a cleansed listing data frame
-    :return: a data frame with ONLY the features for the review dimensions
-    """
-    # make a copy
-    df_location = df[['ID', 'SCRAPED_DATE','STREET','NEIGHBOURHOOD_CLEANSED','CITY', 'STATE', 'ZIPCODE', 'MARKET',
-       'SMART_LOCATION', 'COUNTRY', 'LATITUDE', 'LONGITUDE',
-       'IS_LOCATION_EXACT']]
-
-    return df_location
-
-
-
-def read_table(engine, table_name, date_start = None, date_end = None):
-    """
-    Read the table from PostgreSQL
-    :param engine: the connection engine from sqlalchemy
-    :param table_name: name of the table
-    :param date_start: start date the data to retrieve
-    :param date_end: end date the data to retrieve
-    :return: the data frame read from the PostgreSQL
-    """
-    if None not in (date_start, date_end):
-        query = 'SELECT * FROM ' + f'"{table_name}" WHERE "DATE" between "{date_start}" and "{date_end}"'
-    else:
-        query = 'SELECT * FROM ' + f'"{table_name}"'
-
-    df = pd.read_sql(query, engine)
-    return df
-
-def read_data(path, file_names, col_scrape_date, col_names=None):
-    """
-    Read multiple csv files and output a list of  dataframe
-    :param path: file path
-    :param file_names: file names in regex
-    :param col_names: columns to output
-    :param col_scrape_date: the column to be used to create scrape_date
-    :return: a list of df
-    """
-    file_paths = glob.glob(os.path.join(path, file_names))
-    list_df = []
-
-    for file in file_paths:
-        df = pd.read_csv(file, header=0, low_memory=False)
-        if col_names:
-            df = df[col_names]
-        df['SCRAPED_DATE'] = df[col_scrape_date].min()
-        list_df.append(df)
-
-    return list_df
-
-def agg_to_monthly(df):
-    """
-    Aggregate calednar data to monthly
-    :param df: calender daily data
-    :return: a df of monthly calendar data
+    :return: a data frame with ONLY the features for the host dimension
     """
     # make a copy
     df_cp = df.copy()
 
-    df_cp['YEAR_MONTH'] = df_cp.DATE.str[:7]
+    df_cp['HOST_MONTHS'] = df_cp.apply(lambda row: calculate_months(row['SCRAPED_DATE']
+                                                                    , row['HOST_SINCE']), axis=1)
 
-    df_cp = df_cp.groupby(['ID', 'YEAR_MONTH']).agg({
-        'BASE_PRICE': 'median'
-        , 'TXN_PRICE': 'median'
-        , 'BOOKED': 'sum'}).reset_index()
+    if output_all:
+        cols = ['ID', 'YEAR_MONTH', 'HOST_MONTHS', 'HOST_NEIGHBOURHOOD'
+            , 'HOST_RESPONSE_TIME', 'HOST_RESPONSE_RATE', 'HOST_ACCEPTANCE_RATE'
+            , 'HOST_IS_SUPERHOST', 'HOST_LISTINGS_COUNT', 'HOST_ENTIRE_HOMES'
+            , 'HOST_PRIVATE_ROOMS', 'HOST_SHARED_ROOMS', 'HOST_VERIFICATIONS'
+            , 'HOST_HAS_PROFILE_PIC', 'HOST_IDENTITY_VERIFIED']
+        df_host = df_cp[cols]
+        return df_host
+    else:
+        return df_cp
 
-    return df_cp
+# def fs_(df, output_all = False):
+#     """
+#     Take the input data and create features for the time dimension
+#     :param df: a cleansed listing data frame
+#     :return: a data frame with ONLY the features for the time dimension
+#     """
+#     # make a copy
+#     df_cp = df.copy()
+#
+#
+#
+#     if output_all:
+#         cols = ['ID', 'YEAR_MONTH']
+#         df_time = df_cp[cols]
+#         return df_time
+#     else:
+#         return df_cp

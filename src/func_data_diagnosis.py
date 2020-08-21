@@ -40,7 +40,7 @@ def cleanse_data(df, list_data = True):
         for col in ['INSTANT_BOOKABLE', 'REQUIRE_GUEST_PROFILE_PICTURE', 'REQUIRE_GUEST_PHONE_VERIFICATION'
                     , 'HOST_IS_SUPERHOST', 'HOST_HAS_PROFILE_PIC', 'HOST_IDENTITY_VERIFIED'
                     , 'IS_LOCATION_EXACT', 'IS_BUSINESS_TRAVEL_READY']:
-            df_cp[col].replace({'t': 1, 'f': 0}, inplace = True)
+            df_cp[col] = df_cp[col].replace({'t': 1, 'f': 0})
 
         # convert str to num
         for col in ['HOST_RESPONSE_RATE', 'HOST_ACCEPTANCE_RATE']:
