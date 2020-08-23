@@ -60,7 +60,7 @@ def split_data(df, test_month, val_month=None):
             sys.exit('Inappropriate period selection')
 
 
-def encode_data(cols, df_train, df_test, df_val=None):
+def encode_data(cols, df_train, df_test=None, df_val=None, out_encoder = False):
     """
     Encode categorical columns in train, val and test datasets
     :param df_train: training data
@@ -73,31 +73,38 @@ def encode_data(cols, df_train, df_test, df_val=None):
     ohe = OneHotEncoder(handle_unknown='ignore', sparse=False)
     df_ohe_train = pd.DataFrame(ohe.fit_transform(df_train[cols]))
     # df_ohe_val = pd.DataFrame(ohe.transform(df_val[cols]))
-    df_ohe_test = pd.DataFrame(ohe.transform(df_test[cols]))
+    # df_ohe_test = pd.DataFrame(ohe.transform(df_test[cols]))
 
     # One-hot encoding removed index, put it back
     df_ohe_train.index = df_train.index
     # df_ohe_val.index = df_val.index
-    df_ohe_test.index = df_test.index
+    # df_ohe_test.index = df_test.index
 
     # Get the numerical columns
     df_train_num = df_train.drop(cols, axis=1)
     # df_val_num = df_val.drop(cols, axis=1)
-    df_test_num = df_test.drop(cols, axis=1)
+    # df_test_num = df_test.drop(cols, axis=1)
 
     # Add one-hot encoded columns to numerical columns
     df_train_ohe = pd.concat([df_train_num, df_ohe_train], axis=1)
-    df_test_ohe = pd.concat([df_test_num, df_ohe_test], axis=1)
+    # df_test_ohe = pd.concat([df_test_num, df_ohe_test], axis=1)
     # df_val_ohe = pd.concat([df_val_num, df_ohe_val], axis=1)
 
-    if df_val is None:
-        return df_train_ohe, df_test_ohe
+    if (df_test is None) & (df_val is None) & (out_encoder):
+        return df_train_ohe, ohe
 
     else:
         df_ohe_val = pd.DataFrame(ohe.transform(df_val[cols]))
+        df_ohe_test = pd.DataFrame(ohe.transform(df_test[cols]))
+
         df_ohe_val.index = df_val.index
+        df_ohe_test.index = df_test.index
+
         df_val_num = df_val.drop(cols, axis=1)
+        df_test_num = df_test.drop(cols, axis=1)
+
         df_val_ohe = pd.concat([df_val_num, df_ohe_val], axis=1)
+        df_test_ohe = pd.concat([df_test_num, df_ohe_test], axis=1)
         return df_train_ohe, df_val_ohe, df_test_ohe
 
 

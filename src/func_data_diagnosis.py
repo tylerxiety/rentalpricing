@@ -46,6 +46,13 @@ def cleanse_data(df, list_data = True):
         for col in ['HOST_RESPONSE_RATE', 'HOST_ACCEPTANCE_RATE']:
             df_cp[col] = df_cp[col].str.replace('%', '').astype(float)
 
+        # convert prices to float
+        # convert to float to keep nan values
+        for col in ['TXN_PRICE','BASE_PRICE']:
+            df_cp[col] = df_cp[col].str.replace('$', '')
+            df_cp[col] = df_cp[col].str.replace(',', '')
+            df_cp[col] = df_cp[col].astype(float)
+
     else: # calendar data
         # tide col names
         colname_map = {'LISTING_ID': 'ID'
@@ -55,8 +62,7 @@ def cleanse_data(df, list_data = True):
 
         # convert prices to float
         # convert to float to keep nan values
-
-        for col in ['TXN_PRICE','BASE_PRICE']:
+        for col in ['SECURITY_DEPOSIT','CLEANING_FEE','EXTRA_PEOPLE']:
             df_cp[col] = df_cp[col].str.replace('$', '')
             df_cp[col] = df_cp[col].str.replace(',', '')
             df_cp[col] = df_cp[col].astype(float)
