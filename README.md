@@ -1,6 +1,6 @@
 # Short-term Rental Forecasting and Pricing
 
-Forecast the demand/orders of Airbnb listings and find the best pricing strategy to maximize rental revenue.
+Forecast the demand/orders of Airbnb listings and find the best pricing strategy to maximise rental revenue.
 
 ## 1.  Background and Problem Formulation
 
@@ -10,13 +10,13 @@ And based on my experience, those suggested prices given by the platform not nec
 So I turn to data science for a second opinion.
 
 One way to tackle a pricing problem is to break it down into two sub-problems: 
-1) find the demand curve, i.e., how many nights would be booked at a given price; 
+1) find the demand curve, i.e., how many nights would be booked at a given price for a week/month; 
 2) find the best prices to maximize the total revenue.
 
 ### 1.1. Find the Demand Curve
 Finding the demand curve is a machine learning problem. And we can treat it either as a classification problem
 or as a regression problem, depending on the actions a host takes against prices.
-Host can set a base price and choose to turn on or off the dynamic pricing (link to Airbnb's dynamic pricing).
+Host can set a base price and choose to turn on or off the dynamic pricing.
 The question is how often the base price changes, e.g., a monthly base price, or weekly, daily, etc.
 I put this into two scenarios: 
 
