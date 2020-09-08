@@ -1,4 +1,4 @@
-# Airbnb Forecasting and Pricing
+# Short-term Rental Forecasting and Pricing
 
 Forecast the demand/orders of Airbnb listings and find the best pricing strategy to maximize rental revenue.
 
