@@ -134,3 +134,12 @@ def train_and_eval_model(model, X_train, y_train, X_test, df_pred):
     # df_ev = evaluate(df_pred)
 
     return train_time, pred_time, model #df_ev,
+
+
+
+def rmsle(predt, dtrain):
+    ''' Root mean squared log error metric'''
+    y = dtrain.get_label()
+    predt[predt < -1] = -1 + 1e-6
+    elements = np.power(np.log1p(y) - np.log1p(predt), 2)
+    return 'RMSLE', float(np.sqrt(np.sum(elements) / len(y)))

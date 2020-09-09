@@ -9,6 +9,7 @@ import pandas as pd
 from dateutil import relativedelta
 import glob
 import os
+import sys
 
 
 def log_time(msg):
@@ -44,7 +45,7 @@ def upload_df(engine, df, table_name):
 
     return tok - tik
 
-def read_table(engine, table_name, date_start = None, date_end = None):
+def read_table(engine, table_name, date_col = 'YEAR_MONTH', date_start = None, date_end = None):
     """
     Read the table from PostgreSQL
     :param engine: the connection engine from sqlalchemy
@@ -54,12 +55,34 @@ def read_table(engine, table_name, date_start = None, date_end = None):
     :return: the data frame read from the PostgreSQL
     """
     if None not in (date_start, date_end):
-        query = 'SELECT * FROM ' + f'"{table_name}" WHERE "DATE" between "{date_start}" and "{date_end}"'
+        query = 'SELECT * FROM ' + f'"{table_name}" WHERE "{date_col}" between '+ f"'{date_start}' and '{date_end}'"
     else:
         query = 'SELECT * FROM ' + f'"{table_name}"'
 
     df = pd.read_sql(query, engine)
     return df
+
+def read_tables(engine, table_names=["FS_LIST_MONTHLY","FS_CAL_MONTHLY"
+    ,"FS_HOST_MONTHLY",'FS_REVIEW_MONTHLY'
+    ,"FS_BOOKED_MONTHLY","FS_LOCATION_MONTHLY"
+    ,"FS_TIME_MONTHLY","FS_PRICE_MONTHLY"], date_start = None, date_end = None):
+    """
+    read multiple tables and combine into one df
+    :param engine:
+    :param table_names:
+    :param date_start:
+    :param date_end:
+    :return:
+    """
+    # initialize
+    df_all = pd.DataFrame(columns=['ID','YEAR_MONTH'])
+
+    for table in table_names:
+        df = read_table(engine, table, date_start, date_end)
+        df_all = df_all.merge(df, on = ['ID','YEAR_MONTH'],how='outer')
+
+    return df_all
+
 
 def read_data(path, file_names, col_scrape_date, listing_data = False):
     """
@@ -187,7 +210,6 @@ def fs_time(df, output_all = False):
     df_cp['YEAR'] = df_cp.YEAR_MONTH.str[:4].astype(int)
     df_cp['MONTH'] = df_cp.YEAR_MONTH.str[5:7].astype(int)
 
-    # quarter
     df_cp["SCRAPED_DATE"] = pd.to_datetime(df_cp.SCRAPED_DATE)
     df_cp["QUARTER"] = df_cp["SCRAPED_DATE"].dt.quarter
     df_cp["YEAR_START"] = df_cp["SCRAPED_DATE"].dt.is_year_start
@@ -253,18 +275,33 @@ def calculate_months(date1, date2):
     :param date2: date str
     :return: months difference b/w the dates
     """
-    if isinstance(date2, str) & isinstance(date1, str):
-        date1 = pd.to_datetime(date1)
-        date2 = pd.to_datetime(date2)
+    for date in [date1, date2]:
 
-        r = relativedelta.relativedelta(date1, date2)
-        months = 12*abs(r.years)+abs(r.months)
+        if pd.isnull(date):
+            return None
 
-        return months
-    else:
-        pass
+    r = relativedelta.relativedelta(pd.to_datetime(date1), pd.to_datetime(date2))
+    months = 12*abs(r.years)+abs(r.months)
+
+    return months
 
 
+    # for date in [date1, date2]:
+    #
+    #     if pd.isnull(date):
+    #         return None
+    #
+    #     elif isinstance(date, str):
+    #         date = pd.to_datetime(date)
+    #
+    # if isinstance(date2, datetime) & isinstance(date1, datetime):
+    #
+    #     r = relativedelta.relativedelta(date1, date2)
+    #     months = 12*abs(r.years)+abs(r.months)
+    #
+    #     return months
+    # else:
+    #     sys.exit('Wrong input!')
 
 def fs_calendar(df, output_all = False):
     """
@@ -359,25 +396,25 @@ def fs_location(df, output_all = False):
     else:
         return df_cp
 
-def fs_host(df):
-    """
-    Take the input data and create features for the host dimensions
-    :param df: a cleansed listing data frame
-    :return: a data frame with ONLY the features for the host dimensions
-    """
-    # make a copy
-    df_host = df[['SCRAPED_DATE', 'HOST_ID', 'HOST_SINCE', 'HOST_NEIGHBOURHOOD',
-                       'HOST_RESPONSE_TIME', 'HOST_RESPONSE_RATE', 'HOST_ACCEPTANCE_RATE',
-                       'HOST_IS_SUPERHOST', 'HOST_LISTINGS_COUNT',
-                       'HOST_ENTIRE_HOMES',
-                       'HOST_PRIVATE_ROOMS',
-                       'HOST_SHARED_ROOMS', 'HOST_VERIFICATIONS',
-                       'HOST_HAS_PROFILE_PIC', 'HOST_IDENTITY_VERIFIED']]
-    # convert HOST_SINCE to the number of months hosted
-    df_host['HOST_MONTHS'] = df_host.apply(lambda row: calculate_months(
-        pd.to_datetime(row['SCRAPED_DATE']), pd.to_datetime(row['HOST_SINCE'])), axis=1)
-
-    return df_host
+# def fs_host(df):
+#     """
+#     Take the input data and create features for the host dimensions
+#     :param df: a cleansed listing data frame
+#     :return: a data frame with ONLY the features for the host dimensions
+#     """
+#     # make a copy
+#     df_host = df[['SCRAPED_DATE', 'HOST_ID', 'HOST_SINCE', 'HOST_NEIGHBOURHOOD',
+#                        'HOST_RESPONSE_TIME', 'HOST_RESPONSE_RATE', 'HOST_ACCEPTANCE_RATE',
+#                        'HOST_IS_SUPERHOST', 'HOST_LISTINGS_COUNT',
+#                        'HOST_ENTIRE_HOMES',
+#                        'HOST_PRIVATE_ROOMS',
+#                        'HOST_SHARED_ROOMS', 'HOST_VERIFICATIONS',
+#                        'HOST_HAS_PROFILE_PIC', 'HOST_IDENTITY_VERIFIED']]
+#     # convert HOST_SINCE to the number of months hosted
+#     df_host['HOST_MONTHS'] = df_host.apply(lambda row: calculate_months(
+#         pd.to_datetime(row['SCRAPED_DATE']), pd.to_datetime(row['HOST_SINCE'])), axis=1)
+#
+#     return df_host
 
 def fs_host(df, output_all = False):
     """
@@ -401,6 +438,122 @@ def fs_host(df, output_all = False):
         return df_host
     else:
         return df_cp
+
+def fs_final(df, output_all = False):
+    """
+    Take the input data and create final features for model API
+    :param df: the listing data frame
+    :return: a data frame with all features need for model API
+    """
+
+    # make a copy
+    df_cp = df.copy()
+
+    # ensure data type
+
+    #todo: impute missing month
+    # listing features
+    df_cp.PROPERTY_TYPE = df_cp.PROPERTY_TYPE.replace(['loft', 'guest suite', 'condominium'], 'apartment')
+    df_cp.PROPERTY_TYPE = df_cp.PROPERTY_TYPE.replace(
+        ['townhouse', 'guesthouse', 'cottage', 'bungalow', 'cabin', 'tiny house', 'nature lodge', 'villa',
+         'earth house', 'castle',
+         'treehouse', 'chalet', 'lighthouse'], 'house')
+    df_cp.PROPERTY_TYPE = df_cp.PROPERTY_TYPE.replace(
+        ['farm stay', 'bed and breakfast', 'barn', 'train', 'boat', 'camper/rv', 'tent', 'hut', 'kezhan (china)',
+         'casa particular (cuba)', 'campsite', 'dome house', 'tipi'], 'other')
+    df_cp.PROPERTY_TYPE = df_cp.PROPERTY_TYPE.replace(
+        ['boutique hotel', 'serviced apartment', 'hotel', 'hostel', 'aparthotel'], 'serviced')
+    # create luxury_flag
+    df_cp['LUXURY_FLAG'] = np.where(df_cp.CANCELLATION_POLICY.str.contains('luxury'), 1, 0)
+
+    # time features
+    df_cp['YEAR'] = df_cp.YEAR_MONTH.str[:4].astype(int)
+    df_cp['MONTH'] = df_cp.YEAR_MONTH.str[5:7].astype(int)
+    df_cp["YEAR_MONTH"] = pd.to_datetime(df_cp.YEAR_MONTH)
+    df_cp["QUARTER"] = df_cp["YEAR_MONTH"].dt.quarter
+    df_cp["YEAR_START"] = df_cp["YEAR_MONTH"].dt.is_year_start
+    df_cp["YEAR_END"] = df_cp["YEAR_MONTH"].dt.is_year_end
+
+    # price features
+    df_cp['PRICE_PER_GUEST'] = df_cp.TXN_PRICE / df_cp.GUESTS_INCLUDED
+    # lag
+    df_cp["PRICE_LAG_1"] = df_cp.sort_values(by='YEAR_MONTH').groupby(["ID"])["TXN_PRICE"].shift(1)
+    df_cp["PRICE_LAG_2"] = df_cp.sort_values(by='YEAR_MONTH').groupby(["ID"])["TXN_PRICE"].shift(2)
+    df_cp["PRICE_LAG_3"] = df_cp.sort_values(by='YEAR_MONTH').groupby(["ID"])["TXN_PRICE"].shift(3)
+    # minus lag
+    df_cp["PRICE_MINUS_LAG_1"] = df_cp.TXN_PRICE - df_cp.PRICE_LAG_1
+    df_cp["PRICE_MINUS_LAG_2"] = df_cp.TXN_PRICE - df_cp.PRICE_LAG_2
+    df_cp["PRICE_MINUS_LAG_3"] = df_cp.TXN_PRICE - df_cp.PRICE_LAG_3
+    # moving average/median
+    pma3 = df_cp.sort_values(by='YEAR_MONTH').groupby(["ID"])["TXN_PRICE"].rolling(window=3).median()
+    df_cp['PRICE_MA_3'] = pma3.reset_index(level=0, drop=True).reset_index(level=0, drop=True)
+    # minus moving average
+    df_cp["PRICE_MINUS_MA_3"] = df_cp.TXN_PRICE - df_cp.PRICE_MA_3
+
+    # booked features
+    df_cp["BOOKED_LAG_1"] = df_cp.sort_values(by='YEAR_MONTH').groupby(["ID"])["BOOKED"].shift(1)
+    df_cp["BOOKED_LAG_3"] = df_cp.sort_values(by='YEAR_MONTH').groupby(["ID"])["BOOKED"].shift(3)
+    df_cp["BOOKED_LAG1_MINUS_LAG3"] = df_cp.BOOKED_LAG_1 - df_cp.BOOKED_LAG_3
+    # lag1 moving average/median
+    ma3 = df_cp.sort_values(by='YEAR_MONTH').groupby(["ID"])["BOOKED_LAG_1"].rolling(window=3).median()
+    df_cp['BOOKED_LAG1_MA3'] = ma3.reset_index(level=0, drop=True).reset_index(level=0, drop=True)
+    # minus moving average
+    df_cp["BOOKED_LAG1_MINUS_LAG1MA3"] = df_cp.BOOKED_LAG_1 - df_cp.BOOKED_LAG1_MA3
+
+    # location
+    df_cp = df_cp.rename(columns={'NEIGHBOURHOOD_CLEANSED': 'NEIGHBOURHOOD'})
+
+    # review features
+    for col in ['FIRST_REVIEW', 'LAST_REVIEW']:
+        df_cp[f'MONTH_SINCE_{col}'] = df_cp.apply(lambda row: calculate_months(
+            row['YEAR_MONTH'], row[col]), axis=1)
+
+    # host
+    df_cp['HOST_MONTHS'] = df_cp.apply(lambda row: calculate_months(row['HOST_SINCE'],
+                                                                    row['YEAR_MONTH']), axis=1)
+
+    # put YEAR_MONTH back to str
+    df_cp["YEAR_MONTH"] = df_cp.YEAR_MONTH.astype(str).str[:7]
+
+    if output_all:
+        cols = [
+            # list
+            'ID', 'YEAR_MONTH', 'PROPERTY_TYPE', 'ROOM_TYPE', 'ACCOMMODATES'
+            , 'BATHROOMS', 'BEDROOMS', 'BEDS', 'BED_TYPE', 'SQUARE_FEET'
+            , 'INSTANT_BOOKABLE', 'GUESTS_INCLUDED', 'CANCELLATION_POLICY'
+            , 'REQUIRE_GUEST_PROFILE_PICTURE', 'REQUIRE_GUEST_PHONE_VERIFICATION'
+            , 'LUXURY_FLAG'
+            # cal
+            , 'AVG_MINIMUM_NIGHTS', 'AVG_MAXIMUM_NIGHTS'
+            # host
+            , 'HOST_MONTHS', 'HOST_RESPONSE_RATE'
+            , 'HOST_ACCEPTANCE_RATE', 'HOST_IS_SUPERHOST', 'HOST_LISTINGS_COUNT'
+            , 'HOST_HAS_PROFILE_PIC', 'HOST_IDENTITY_VERIFIED'
+            # review
+            , 'NUMBER_OF_REVIEWS', 'MONTH_SINCE_FIRST_REVIEW'
+            , 'MONTH_SINCE_LAST_REVIEW', 'REVIEW_SCORES_RATING', 'REVIEW_SCORES_ACCURACY'
+            , 'REVIEW_SCORES_CLEANLINESS', 'REVIEW_SCORES_CHECKIN'
+            , 'REVIEW_SCORES_COMMUNICATION', 'REVIEW_SCORES_LOCATION'
+            , 'REVIEW_SCORES_VALUE', 'REVIEWS_PER_MONTH'
+            # booked
+            , 'BOOKED', 'BOOKED_LAG_1', 'BOOKED_LAG_3', 'BOOKED_LAG1_MINUS_LAG3'
+            , 'BOOKED_LAG1_MA3', 'BOOKED_LAG1_MINUS_LAG1MA3'
+            # location
+            , 'NEIGHBOURHOOD', 'IS_LOCATION_EXACT'
+            # , 'LATITUDE', 'LONGITUDE'
+            # time
+            , 'MONTH', 'QUARTER', 'YEAR', 'YEAR_START', 'YEAR_END'
+            # price
+            , 'TXN_PRICE', 'PRICE_PER_GUEST', 'SECURITY_DEPOSIT', 'CLEANING_FEE', 'EXTRA_PEOPLE'
+            , 'PRICE_LAG_1', 'PRICE_LAG_2', 'PRICE_LAG_3', 'PRICE_MINUS_LAG_1'
+            , 'PRICE_MINUS_LAG_2', 'PRICE_MINUS_LAG_3', 'PRICE_MA_3', 'PRICE_MINUS_MA_3'
+
+        ]
+        df_final = df_cp[cols]
+        return df_final
+    else:
+        return df_cp
+
 
 # def fs_(df, output_all = False):
 #     """

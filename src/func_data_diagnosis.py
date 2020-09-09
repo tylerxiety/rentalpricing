@@ -29,6 +29,7 @@ def cleanse_data(df, list_data = True):
             , 'MAXIMUM_MAXIMUM_NIGHTS': 'MAX_MAXIMUM_NIGHTS'
             , 'MINIMUM_NIGHTS_AVG_NTM': 'AVG_MINIMUM_NIGHTS'
             , 'MAXIMUM_NIGHTS_AVG_NTM': 'AVG_MAXIMUM_NIGHTS'
+            , 'LAST_SCRAPED':'SCRAPED_DATE'
             }
         df_cp = df_cp.rename(columns=colname_map)
 
@@ -48,10 +49,12 @@ def cleanse_data(df, list_data = True):
 
         # convert prices to float
         # convert to float to keep nan values
-        for col in ['TXN_PRICE','BASE_PRICE']:
+        for col in ['SECURITY_DEPOSIT','CLEANING_FEE','EXTRA_PEOPLE']:
             df_cp[col] = df_cp[col].str.replace('$', '')
             df_cp[col] = df_cp[col].str.replace(',', '')
             df_cp[col] = df_cp[col].astype(float)
+
+        df_cp['YEAR_MONTH'] = df_cp.SCRAPED_DATE.str[:7]
 
     else: # calendar data
         # tide col names
@@ -60,11 +63,12 @@ def cleanse_data(df, list_data = True):
             , 'PRICE': 'BASE_PRICE'}
         df_cp = df_cp.rename(columns=colname_map)
 
+
         # convert prices to float
         # convert to float to keep nan values
-        for col in ['SECURITY_DEPOSIT','CLEANING_FEE','EXTRA_PEOPLE']:
-            df_cp[col] = df_cp[col].str.replace('$', '')
-            df_cp[col] = df_cp[col].str.replace(',', '')
+        for col in ['TXN_PRICE','BASE_PRICE']:
+            df_cp[col] = df_cp[col].astype(str).str.replace('$', '')
+            df_cp[col] = df_cp[col].astype(str).str.replace(',', '')
             df_cp[col] = df_cp[col].astype(float)
 
         # convert availability to booked
