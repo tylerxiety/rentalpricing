@@ -10,7 +10,7 @@ def global_model_api(df, pred_time = False):
     """
     Take the input dataframe and predict the demand (number of nights booked)
     :param df: a dataframe with columns: ACCOMMODATES...NEIGHBOURHOOD_CLEANSED
-    :return: a dataframe with the same columns: ACCOMMODATES...NEIGHBOURHOOD_CLEANSED, plus BOOKED
+    :return: a dataframe with the columns: ID, YEAR_MONTH, PRICE, BOOKED
     """
     # record
     tic = time.time()
@@ -75,7 +75,7 @@ def global_model_api(df, pred_time = False):
     # read model and predict
     model = joblib.load('model/model_base.model')
 
-    df_pred = df_data[['ID','YEAR_MONTH']]
+    df_pred = df_data[['ID','YEAR_MONTH','TXN_PRICE']]
     df_data = df_data.drop(['ID', 'YEAR_MONTH', 'BOOKED'], axis=1)
     df_pred['BOOKED'] = model.predict(df_data)
 
